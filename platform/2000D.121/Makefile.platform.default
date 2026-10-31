@@ -1,0 +1,19 @@
+# Canon EOS 2000D 1.2.1
+
+CANON_NAME_FIR      = CCF26121.FIR
+FIRMWARE_ID         = 0x80000432
+
+# 32MB ROM1 mapped at 0xFE000000..0xFFFFFFFF, firmware entry at +0xC0000
+ROMBASEADDR         = 0xFE0C0000
+PLATFORM_ARCH       = armv5te
+
+ifeq ($(ML_SRC_PROFILE),generic)
+# Load ML at the end of the AllocateMemory pool
+# Default 0x2D0000 - 0xD00000, patched to 0x2D0000 - 0xC80000 (512K for ML).
+RESTARTSTART        = 0xC80000
+ML_BOOT_OBJ         = boot-d45-ch.o
+ML_SRC_EXTRA_OBJS  += function_overrides.o
+else
+RESTARTSTART        = 0xC80000
+ML_BOOT_OBJ         = boot-d45-ch.o
+endif

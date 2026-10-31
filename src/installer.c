@@ -180,6 +180,7 @@ static void print_bootflags()
     bmp_printf( FONT_SMALL, 700 - values_w - labels_w, 0, labels);
 }
 
+#if !defined(HIJACK_CACHE_HACK)
 /** These are called when new tasks are created */
 int my_init_task(int a, int b, int c, int d);
 void my_bzero( uint8_t * base, uint32_t size );
@@ -277,6 +278,8 @@ copy_and_restart( int offset )
     while(1)
         ;
 }
+#endif
+
 
 static void hook_on_canon_menu()
 {
@@ -371,9 +374,14 @@ static int backup_region(char *file, uint32_t base, uint32_t length)
 
 static int rom_backup()
 {
+#if defined(CONFIG_2000D)
+    int ok1 = backup_region("ML/LOGS/ROM1.BIN", 0xFE000000, 0x02000000);
+    return ok1;
+#else
     int ok0 = backup_region("ML/LOGS/ROM0.BIN", 0xF0000000, 0x01000000);
     int ok1 = backup_region("ML/LOGS/ROM1.BIN", 0xF8000000, 0x01000000);
     return ok0 && ok1;
+#endif
 }
 
 /** Perform an initial install and configuration */
@@ -583,10 +591,12 @@ int display_is_on_550D = 0;
 int get_display_is_on_550D() { return display_is_on_550D; }
 void config_save(){};
 int get_ms_clock() { return 0; }
-char * get_task_name_from_id(int id) { return ""; }
+const char * get_task_name_from_id(int id) { return ""; }
 void beep() {} ;
+#if !defined(HIJACK_CACHE_HACK)
 uint32_t ml_used_mem = 0;
 uint32_t ml_reserved_mem = 0;
+#endif
 void menu_redraw() {} ;
 int should_run_polling_action(int period_ms, int* last_updated_time) { return 0; }
 void menu_add( const char * name, struct menu_entry * new_entry, int count ) {} 
@@ -605,7 +615,7 @@ struct memSuite * _shoot_malloc_suite_contig(size_t size) { return 0; }
 void _shoot_free_suite(struct memSuite * suite) {}
 struct memSuite * _srm_malloc_suite(int num) { return 0; }
 void _srm_free_suite(struct memSuite * suite) {}
-char* get_current_task_name() { return "?"; }
+//char* get_current_task_name() { return "?"; }
 int printf(const char * format, ...) { return 0; }
 
 int y_times_BMPPITCH_cache[BMP_H_PLUS - BMP_H_MINUS];

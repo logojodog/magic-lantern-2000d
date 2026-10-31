@@ -306,7 +306,7 @@ static void fps_read_current_timer_values();
     #define FPS_TIMER_A_MIN (ZOOM ? 734 : MV1080 ? 546 :576)
     #undef FPS_TIMER_B_MIN
     #define FPS_TIMER_B_MIN (ZOOM ? 1312 : MV480 ? 2000 : MV720 ? 1000 : 2200)
-#elif defined(CONFIG_1300D) || defined(CONFIG_4000D)
+#elif (defined(CONFIG_1300D) || defined(CONFIG_2000D)) || defined(CONFIG_4000D)
 //    #define NEW_FPS_METHOD 1
 //    #define SENSOR_TIMING_TABLE MEM(0x4015C)
 //    #define VIDEO_PARAMETERS_SRC_3 0x6A95C
@@ -997,7 +997,7 @@ static void flip_zoom_twostage(int stage)
                 f0 = video_mode[2];
                 video_mode[2] = 
                     f0 == 24 ? 25 : 
-#if defined(CONFIG_1100D) || defined(CONFIG_1200D) || defined(CONFIG_1300D)
+#if defined(CONFIG_1100D) || defined(CONFIG_1200D) || (defined(CONFIG_1300D) || defined(CONFIG_2000D))
                     f0 == 25 ? 30 :
 #else
                     f0 == 25 ? 30 :

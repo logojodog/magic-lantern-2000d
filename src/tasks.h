@@ -31,7 +31,7 @@
 	extern int _get_task_info_by_id(int, void*);
 #else
 
-	#ifdef CONFIG_1300D
+	#if defined(CONFIG_1300D) || defined(CONFIG_2000D)
 		int get_task_info_by_id(int, void*);
 		extern int _get_task_info_by_id(int, void*);
 
@@ -96,7 +96,7 @@ struct task
                                                    // Comparison against taskId is done with full 32 in *some*
                                                    // APIs though, at least on D678, so the upper bits
                                                    // mean something different.
-#if defined(CONFIG_DIGIC_78) || defined(CONFIG_1300D) // Maybe D678X? Confirmed on 200D, M50, R
+#if defined(CONFIG_DIGIC_78) || (defined(CONFIG_1300D) || defined(CONFIG_2000D)) // Maybe D678X? Confirmed on 200D, M50, R
         uint32_t           unknown_08; // 0x44, 4
 #endif
 
@@ -127,7 +127,7 @@ struct task
 #endif
                                         // 0x50 / 0x5c // sizeof struct
 };
-#if defined(CONFIG_DIGIC_678) || defined(CONFIG_1300D)
+#if defined(CONFIG_DIGIC_678) || (defined(CONFIG_1300D) || defined(CONFIG_2000D))
 // NB, these fields get copied from a struct task,
 // and the effective types seems to change.  I guess this
 // is just down to alignment of the structs (the asm loads a byte,
@@ -152,7 +152,7 @@ struct task_attr_str {
   unsigned int unknown_02;   // 0x28
   unsigned int unknown_03;    // 0x2c
   unsigned int context;         // 0x30
-#ifdef CONFIG_1300D
+#if defined(CONFIG_1300D) || defined(CONFIG_2000D)
   char *name;                   // 0x34
   unsigned int unknown_04;      // 0x38
 #else

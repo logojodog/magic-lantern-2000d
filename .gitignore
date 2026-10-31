@@ -1,0 +1,26 @@
+# Compiler artifacts
+*.o
+*.d
+*.dep
+*.map
+*.a
+*.tmp
+*.log
+*.exe
+__pycache__/
+
+# Output binaries (kept in GitHub Releases)
+*.bin
+autoexec
+autoexec-fir
+magiclantern
+magiclantern.bin
+Makefile.user
+
+# Modules build artifacts
+modules/*/*.o
+modules/*/*.d
+modules/*/*.dep
+modules/*/*.mo
+modules/*/*.sym
+modules/*/module_strings.h

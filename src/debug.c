@@ -41,7 +41,7 @@ void audio_reg_dump_once();
 #include "edmac-memcpy.h"
 #endif
 
-char camera_serial[32];
+extern char camera_serial[32];
 
 extern int config_autosave;
 extern void config_autosave_toggle(void* unused, int delta);

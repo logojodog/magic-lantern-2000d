@@ -114,7 +114,7 @@ static int my_init_task(int a, int b, int c, int d)
 
     qprintf("[BOOT] my_init_task completed.\n");
 
-#ifdef CONFIG_1300D
+#if (defined(CONFIG_1300D) || defined(CONFIG_2000D)) && !defined(CONFIG_INSTALLER)
 // set patch.c (patch_instruction_jump) for more information
 // allocate <patch_jump_size> bytes with the lowest address, try static, malloc or gcc_alloca or other.
     extern uint32_t  patch_jump_size;

@@ -156,7 +156,7 @@ typedef void (*patch_hook_function_cbr)(uint32_t* regs, uint32_t* stack, uint32_
 
 /* to be called only from a patch_hook_function_cbr */
 #define PATCH_HOOK_CALLER() (regs[13]-4)    /* regs[13] contains LR, not SP */
-#ifdef CONFIG_1300D
+#if defined(CONFIG_1300D) || defined(CONFIG_2000D)
 /* use this patch on 1300D for hijacking function calls, to escape the 32MB relative jump limitations */
 int patch_instruction_jump(
     uintptr_t rom_func_addr,

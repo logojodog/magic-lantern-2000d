@@ -75,7 +75,7 @@ static int num_patches = 0;
 static struct matrix_patch matrix_patches[MAX_MATRIX_PATCHES] = {{0}};
 static int num_matrix_patches = 0;
 
-#ifdef CONFIG_1300D
+#if defined(CONFIG_1300D) || defined(CONFIG_2000D)
 // see patch_instruction_jump
 uint32_t *patch_jump_vector;
 const uint32_t patch_jump_size = 64*3;
@@ -534,7 +534,7 @@ int unpatch_memory(uintptr_t _addr)
             p = i;
             break;
         }
-#ifdef CONFIG_1300D
+#if defined(CONFIG_1300D) || defined(CONFIG_2000D)
 		else
 		{
 			int logging_slot = -1;
@@ -594,7 +594,7 @@ int unpatch_memory(uintptr_t _addr)
             memset(&logging_hooks[i], 0, sizeof(union logging_hook_code));
         }
     }
-#ifdef CONFIG_1300D
+#if defined(CONFIG_1300D) || defined(CONFIG_2000D)
    // check is this patch was an double jump 
    for (uint32_t i=0;i<patch_jump_size/sizeof(jump_vector);i++) 
    {
@@ -1003,7 +1003,7 @@ int patch_hook_function(uintptr_t addr, uint32_t orig_instr, patch_hook_function
     }
     
     union logging_hook_code * hook = &logging_hooks[logging_slot];
-#ifndef CONFIG_1300D
+#if !(defined(CONFIG_1300D) || defined(CONFIG_2000D))
     /* check the jumps we are going to use */
     /* fixme: use long jumps? */
     if (!check_jump_range((uint32_t) &hook->reloc_insn, (uint32_t) addr + 4) ||
@@ -1043,7 +1043,7 @@ int patch_hook_function(uintptr_t addr, uint32_t orig_instr, patch_hook_function
     sync_caches();
 
 
-#ifdef CONFIG_1300D
+#if defined(CONFIG_1300D) || defined(CONFIG_2000D)
     /* Make the hooking code "jump_back" to use double jumping  */
     err = patch_instruction_jump(&hook->jump_back,addr+4, 1, description);
     if (err)
@@ -1075,7 +1075,7 @@ end:
     return err;
 }
 
-#ifdef CONFIG_1300D
+#if defined(CONFIG_1300D) || defined(CONFIG_2000D)
 
 #define JUMP_BL 0
 #define JUMP_B  1
@@ -1494,7 +1494,7 @@ static void patch_simple_init()
     menu_add("Debug", patch_menu, COUNT(patch_menu));
 
 
-#ifdef CONFIG_1300D
+#if defined(CONFIG_1300D) || defined(CONFIG_2000D)
     // memset jump_vector
     memset(patch_jump_vector,0,patch_jump_size);
 

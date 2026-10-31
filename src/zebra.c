@@ -3017,8 +3017,8 @@ struct menu_entry zebra_menus[] = {
             {
                 .name = "Histogram type",
                 .priv = &hist_type,
-                .update = raw_histo_update,
                 #ifdef FEATURE_RAW_HISTOGRAM
+                .update = raw_histo_update,
                 .max = 3,
                 #else
                 .max = 1,

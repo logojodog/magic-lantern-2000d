@@ -146,7 +146,7 @@ static int (*dual_iso_get_dr_improvement)() = MODULE_FUNCTION(dual_iso_get_dr_im
 #define DEFAULT_RAW_BUFFER_SIZE (0x46CC0000 - 0x46798100)
 #endif
 
-#ifdef CONFIG_1300D
+#if defined(CONFIG_1300D) || defined(CONFIG_2000D)
 #define DEFAULT_RAW_BUFFER MEM(MEM(0x37930 + 0x30))     /*0xfe1a3d6c how much do we have allocated? */
 #define DEFAULT_RAW_BUFFER_SIZE 8*1024*1024     /* is this really overwritten by other code? needs some investigation */
 #endif
@@ -213,7 +213,7 @@ static int (*dual_iso_get_dr_improvement)() = MODULE_FUNCTION(dual_iso_get_dr_im
  * and http://a1ex.bitbucket.org/ML/states/ for state diagrams.
  */
 
-#if defined(CONFIG_5D2) || defined(CONFIG_50D) || defined(CONFIG_60D) || defined(CONFIG_550D) || defined(CONFIG_500D) || defined(CONFIG_600D) || defined(CONFIG_1100D) || defined(CONFIG_1200D) || defined(CONFIG_7D) || defined(CONFIG_1300D)
+#if defined(CONFIG_5D2) || defined(CONFIG_50D) || defined(CONFIG_60D) || defined(CONFIG_550D) || defined(CONFIG_500D) || defined(CONFIG_600D) || defined(CONFIG_1100D) || defined(CONFIG_1200D) || defined(CONFIG_7D) || (defined(CONFIG_1300D) || defined(CONFIG_2000D))
 #define RAW_PHOTO_EDMAC 0xc0f04208
 #endif
 
@@ -443,7 +443,7 @@ if (!is_EOSM && !is_100D && !is_6D && !is_5D3)
      -593, 10000,     1772, 10000,    6198, 10000
 #endif
 
-#ifdef CONFIG_1300D
+#if defined(CONFIG_1300D) || defined(CONFIG_2000D)
 	// PLACEHOLDER DATA FROM 600D TO BUILD HELLOWORLD
         //~ { "Canon EOS 1300D", 0, 0x3510,
         //~ { 6461,-907,-882,-4300,12184,2378,-819,1944,5931 } },
@@ -526,7 +526,7 @@ static int dynamic_ranges[] = {1099, 1098, 1082, 1025, 965, 877, 784}; // No ISO
 static int dynamic_ranges[] = {1099, 1098, 1082, 1025, 965, 877, 784}; // No ISO 12800 available
 #endif
 
-#ifdef CONFIG_1300D
+#if defined(CONFIG_1300D) || defined(CONFIG_2000D)
 static int dynamic_ranges[] = {1112, 1080, 1038, 984, 917, 834, 733, 655};
 #endif
 
@@ -955,7 +955,7 @@ int raw_update_params_work()
         skip_bottom = zoom ? 4 : 0;
         #endif
 
-        #ifdef CONFIG_1300D
+        #if defined(CONFIG_1300D) || defined(CONFIG_2000D)
         skip_top    = 28;
         skip_left   = zoom ? 0 : 154;
         skip_right  = zoom ? 0 : 4;
@@ -1028,7 +1028,7 @@ int raw_update_params_work()
         height--;
         #endif
 
-        #if defined(CONFIG_550D) || defined(CONFIG_60D) || defined(CONFIG_600D) || defined(CONFIG_1200D) || defined(CONFIG_1300D)
+        #if defined(CONFIG_550D) || defined(CONFIG_60D) || defined(CONFIG_600D) || defined(CONFIG_1200D) || (defined(CONFIG_1300D) || defined(CONFIG_2000D))
         skip_left = 142;
         skip_top = 52;
         #endif
