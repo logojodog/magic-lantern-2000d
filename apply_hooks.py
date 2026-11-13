@@ -1,12 +1,7 @@
 #!/usr/bin/env python3
-"""Apply the safe M-Film hooks to a magic-lantern 2000D source tree.
+"""Apply ultra-passive M-Film hooks to the 2000D source.
 
-Usage:
-    python3 apply_hooks.py .
-
-Only the key hook and overlay hook are added.
-The menu system is left completely alone so Trash always opens the normal
-Magic Lantern menu (Modules tab visible).
+Only key + overlay hooks. No menu changes. Diagnostic is log-only.
 """
 
 import sys
@@ -15,7 +10,7 @@ from pathlib import Path
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
     if not (root / "src" / "gui-common.c").exists():
-        print("ERROR: does not look like a Magic Lantern source tree")
+        print("ERROR: not a Magic Lantern source tree")
         sys.exit(1)
 
     def edit(rel, old, new, marker):
@@ -25,15 +20,14 @@ def main():
             print(f"  {rel}: already applied")
             return
         if old not in text:
-            print(f"  {rel}: WARNING – anchor not found (source may have changed)")
-            print(f"         looking for:\n{old!r}")
+            print(f"  {rel}: WARNING – anchor not found")
             return
         p.write_text(text.replace(old, new, 1), encoding="utf-8")
         print(f"  {rel}: patched")
 
-    print("Applying safe M-Film hooks for 2000D (no menu redirect)…")
+    print("Applying ultra-passive M-Film hooks…")
 
-    # 1. Key hook (must be before handle_module_keys)
+    # 1. Key hook
     edit("src/gui-common.c",
          "    if (handle_module_keys(event) == 0) return 0;\n",
          "#ifdef FEATURE_FILMROLL\n"
@@ -67,19 +61,17 @@ def main():
          "#endif\n",
          '#include "filmroll.h"')
 
-    # 3. Copy the filmhook source from repo root into src/
+    # 3. Copy filmhook.c into src/
     src_hook = root / "filmhook.c"
     dst_hook = root / "src" / "filmhook.c"
     if not src_hook.exists():
-        print("ERROR: filmhook.c not found in the repository root")
+        print("ERROR: filmhook.c missing from repo root")
         sys.exit(1)
     dst_hook.write_text(src_hook.read_text(encoding="utf-8"), encoding="utf-8")
     print("  src/filmhook.c: written")
 
     # 4. Header
-    hdr = root / "src" / "filmroll.h"
-    hdr.write_text(
-        "/* Minimal declarations for the film OS hooks (module build) */\n"
+    (root / "src" / "filmroll.h").write_text(
         "#ifndef _FILMROLL_H_\n"
         "#define _FILMROLL_H_\n"
         "struct event;\n"
@@ -90,14 +82,14 @@ def main():
     )
     print("  src/filmroll.h: written")
 
-    # 5. Make sure the new file is compiled
+    # 5. Compile filmhook.o
     edit("src/Makefile.src",
          "gui-common.o \\\n",
          "gui-common.o \\\n"
          "filmhook.o \\\n",
          "filmhook.o")
 
-    # 6. Turn FEATURE_FILMROLL on for the 2000D platform(s)
+    # 6. FEATURE_FILMROLL
     for plat in ["platform/2000D.121", "platform/2000D.110"]:
         feat = root / plat / "features.h"
         if not feat.exists():
@@ -110,11 +102,7 @@ def main():
         else:
             print(f"  {plat}/features.h: already has FEATURE_FILMROLL")
 
-    print("\nDone.")
-    print("  • Trash button always opens the normal Magic Lantern menu")
-    print("  • Modules tab will be visible again")
-    print("  • Key + overlay hooks still present for filmos.mo")
-    print("  • Diagnostic writes ML/FILMROLL.LOG if the module is missing")
+    print("\nDone – ultra-passive hooks ready.")
 
 if __name__ == "__main__":
     main()
