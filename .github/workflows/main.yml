@@ -1,0 +1,71 @@
+name: Build 2000D with M-Film hooks
+
+# Run it by hand: Actions tab -> "Build 2000D with M-Film hooks" -> Run workflow.
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    # GCC 10.3 (what the 2000D README asks for: "GCC 10 or newer").
+    # If GitHub no longer offers ubuntu-22.04, try ubuntu-24.04 and send me the log.
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash          # bash with pipefail, so a failing make isn't hidden by "| tee"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0      # the build asks git for the branch name and commit
+
+      - name: Install the build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi \
+            python3 python3-docutils python3-setuptools zip unzip git make
+          arm-none-eabi-gcc --version | head -n 1
+          git --version
+
+      - name: Add M-Film's hooks to the source
+        run: python3 apply_hooks.py .
+
+      - name: Build the modules (the hooks don't need them, so a failure here is not fatal)
+        continue-on-error: true
+        run: |
+          cd modules
+          make -j"$(nproc)" 2>&1 | tail -n 40
+
+      - name: Build autoexec.bin for the 2000D (firmware 1.2.1)
+        run: |
+          cd platform/2000D.121
+          # the symbol file that is in the repository (make clean deletes it, make writes a new one)
+          cp t7_121.sym /tmp/t7_121.sym.original
+          make clean
+          make 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
+
+      - name: Collect the result and check it
+        run: |
+          mkdir -p out/ML/MODULES
+          found=$(find platform/2000D.121 -maxdepth 2 -iname autoexec.bin | head -n 1)
+          if [ -z "$found" ]; then echo "no autoexec.bin was built"; exit 1; fi
+          cp "$found" out/AUTOEXEC.BIN
+          # The modules find Magic Lantern's functions through this file, which lists where
+          # each one ended up in THIS autoexec.bin. It has to come from the same build.
+          sym=$(find platform/2000D.121 -maxdepth 2 -name t7_121.sym | head -n 1)
+          if [ -z "$sym" ]; then echo "no t7_121.sym was built"; exit 1; fi
+          cp "$sym" out/ML/MODULES/t7_121.sym
+          ls -l out/AUTOEXEC.BIN out/ML/MODULES/t7_121.sym
+          md5sum out/AUTOEXEC.BIN
+          echo "The stock 2000D release is about 365,856 bytes; this one should be a little bigger."
+          echo "Hook symbol names inside it (should be 2 or more):"
+          strings -a out/AUTOEXEC.BIN | grep -c -E "filmos_key_used|filmos_overlays" || true
+          echo "Addresses that differ from the symbol file in the repository (so the old one must not be used):"
+          diff <(sort /tmp/t7_121.sym.original) <(sort out/ML/MODULES/t7_121.sym) | grep -c '^>' || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: 2000D-mfilm-hooks
+          path: |
+            out/
+            build.log
