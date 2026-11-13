@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Apply the M-Film hooks to a magic-lantern 2000D source tree.
+"""Apply the safe M-Film hooks to a magic-lantern 2000D source tree.
 
 Usage:
     python3 apply_hooks.py .
 
-Idempotent. Safe to run more than once.
+Only the key hook and overlay hook are added.
+The menu system is left completely alone so Trash always opens the normal
+Magic Lantern menu (Modules tab visible).
 """
 
 import sys
@@ -29,7 +31,7 @@ def main():
         p.write_text(text.replace(old, new, 1), encoding="utf-8")
         print(f"  {rel}: patched")
 
-    print("Applying M-Film hooks for 2000D…")
+    print("Applying safe M-Film hooks for 2000D (no menu redirect)…")
 
     # 1. Key hook (must be before handle_module_keys)
     edit("src/gui-common.c",
@@ -65,31 +67,7 @@ def main():
          "#endif\n",
          '#include "filmroll.h"')
 
-    # 3. Safe menu redirect – only takes over when the module is loaded
-    edit("src/menu.c",
-         "static void menu_open() \n{ \n    if (menu_shown)\n        return;\n",
-         "static void menu_open() \n{ \n"
-         "#ifdef FEATURE_FILMROLL\n"
-         "#ifdef FEATURE_FILMOS_MODULE\n"
-         "    if (filmroll_menu_requested())   /* 1 = film OS handled it */\n"
-         "        return;\n"
-         "#else\n"
-         "    filmroll_menu_requested();\n"
-         "    return;\n"
-         "#endif\n"
-         "#endif\n"
-         "    if (menu_shown)\n        return;\n",
-         "filmroll_menu_requested")
-
-    edit("src/menu.c",
-         '#include "powersave.h"\n',
-         '#include "powersave.h"\n'
-         "#ifdef FEATURE_FILMROLL\n"
-         '#include "filmroll.h"\n'
-         "#endif\n",
-         '#include "filmroll.h"')
-
-    # 4. Copy the filmhook source from repo root into src/
+    # 3. Copy the filmhook source from repo root into src/
     src_hook = root / "filmhook.c"
     dst_hook = root / "src" / "filmhook.c"
     if not src_hook.exists():
@@ -98,7 +76,7 @@ def main():
     dst_hook.write_text(src_hook.read_text(encoding="utf-8"), encoding="utf-8")
     print("  src/filmhook.c: written")
 
-    # 5. Header that the rest of the code includes
+    # 4. Header
     hdr = root / "src" / "filmroll.h"
     hdr.write_text(
         "/* Minimal declarations for the film OS hooks (module build) */\n"
@@ -106,43 +84,37 @@ def main():
         "#define _FILMROLL_H_\n"
         "struct event;\n"
         "int handle_filmroll_keys(struct event *event);\n"
-        "int filmroll_menu_requested(void);\n"
         "int filmroll_overlays_active(void);\n"
         "#endif\n",
         encoding="utf-8"
     )
     print("  src/filmroll.h: written")
 
-    # 6. Make sure the new file is compiled
+    # 5. Make sure the new file is compiled
     edit("src/Makefile.src",
          "gui-common.o \\\n",
          "gui-common.o \\\n"
          "filmhook.o \\\n",
          "filmhook.o")
 
-    # 7. Turn the features on for the 2000D platform(s)
+    # 6. Turn FEATURE_FILMROLL on for the 2000D platform(s)
     for plat in ["platform/2000D.121", "platform/2000D.110"]:
         feat = root / plat / "features.h"
         if not feat.exists():
             continue
         text = feat.read_text(encoding="utf-8", errors="replace")
-        changed = False
         if "FEATURE_FILMROLL" not in text:
             text += "\n#define FEATURE_FILMROLL\n"
-            changed = True
-        if "FEATURE_FILMOS_MODULE" not in text:
-            text += "#define FEATURE_FILMOS_MODULE\n"
-            changed = True
-        if changed:
             feat.write_text(text, encoding="utf-8")
-            print(f"  {plat}/features.h: FEATURE_FILMROLL + FEATURE_FILMOS_MODULE added")
+            print(f"  {plat}/features.h: FEATURE_FILMROLL added")
         else:
-            print(f"  {plat}/features.h: already has the features")
+            print(f"  {plat}/features.h: already has FEATURE_FILMROLL")
 
-    print("\nDone. The resulting AUTOEXEC.BIN will:")
-    print("  • open the film OS automatically once filmos.mo loads")
-    print("  • still let you reach the real ML menu by holding the Q button ~1.5 s")
-    print("  • write a clear message to the screen + ML/FILMROLL.LOG if the module is missing")
+    print("\nDone.")
+    print("  • Trash button always opens the normal Magic Lantern menu")
+    print("  • Modules tab will be visible again")
+    print("  • Key + overlay hooks still present for filmos.mo")
+    print("  • Diagnostic writes ML/FILMROLL.LOG if the module is missing")
 
 if __name__ == "__main__":
     main()
