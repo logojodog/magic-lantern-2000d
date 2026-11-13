@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Apply the minimal M-Film hooks to a magic-lantern 2000D source tree.
+"""Apply the M-Film hooks to a magic-lantern 2000D source tree.
 
 Usage:
-    python3 apply_hooks.py /path/to/magic-lantern-2000d-main
+    python3 apply_hooks.py .
 
 Idempotent. Safe to run more than once.
 """
@@ -11,11 +11,7 @@ import sys
 from pathlib import Path
 
 def main():
-    if len(sys.argv) != 2:
-        print("Usage: python3 apply_hooks.py /path/to/ml-source")
-        sys.exit(1)
-
-    root = Path(sys.argv[1])
+    root = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
     if not (root / "src" / "gui-common.c").exists():
         print("ERROR: does not look like a Magic Lantern source tree")
         sys.exit(1)
@@ -93,16 +89,14 @@ def main():
          "#endif\n",
          '#include "filmroll.h"')
 
-    # 4. Copy the filmhook source
-    src_hook = Path(__file__).parent / "filmhook.c"
+    # 4. Copy the filmhook source from repo root into src/
+    src_hook = root / "filmhook.c"
     dst_hook = root / "src" / "filmhook.c"
-    if src_hook.exists():
-        dst_hook.write_text(src_hook.read_text(encoding="utf-8"), encoding="utf-8")
-        print(f"  src/filmhook.c: written")
-    else:
-        # Fallback: write the content inline if the sibling file is missing
-        print("  WARNING: filmhook.c not found next to this script – writing embedded version")
-        dst_hook.write_text(open(__file__).read().split('EMBEDDED_FILMHOOK_START\n')[1].split('EMBEDDED_FILMHOOK_END')[0] if False else "", encoding="utf-8")
+    if not src_hook.exists():
+        print("ERROR: filmhook.c not found in the repository root")
+        sys.exit(1)
+    dst_hook.write_text(src_hook.read_text(encoding="utf-8"), encoding="utf-8")
+    print("  src/filmhook.c: written")
 
     # 5. Header that the rest of the code includes
     hdr = root / "src" / "filmroll.h"
@@ -145,8 +139,7 @@ def main():
         else:
             print(f"  {plat}/features.h: already has the features")
 
-    print("\nDone. Now build the platform (e.g. make -C platform/2000D.121).")
-    print("The resulting AUTOEXEC.BIN will:")
+    print("\nDone. The resulting AUTOEXEC.BIN will:")
     print("  • open the film OS automatically once filmos.mo loads")
     print("  • still let you reach the real ML menu by holding the Q button ~1.5 s")
     print("  • write a clear message to the screen + ML/FILMROLL.LOG if the module is missing")
