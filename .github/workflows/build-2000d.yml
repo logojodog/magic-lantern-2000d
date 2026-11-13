@@ -1,4 +1,4 @@
-name: Build 2000D with M-Film hooks + filmos.mo
+name: Build 2000D with M-Film hooks
 
 on:
   workflow_dispatch:
@@ -18,14 +18,13 @@ jobs:
       - name: Install the build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi \
-            python3 python3-docutils python3-setuptools zip unzip git make
+          sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi python3 python3-docutils python3-setuptools zip unzip git make
           arm-none-eabi-gcc --version | head -n 1
 
-      - name: Add M-Film's passive hooks to the source
+      - name: Add M-Film passive hooks
         run: python3 apply_hooks.py .
 
-      - name: Build autoexec.bin for the 2000D (firmware 1.2.1)
+      - name: Build autoexec.bin
         run: |
           cd platform/2000D.121
           make clean
@@ -35,92 +34,62 @@ jobs:
         run: |
           mkdir -p out
           found=$(find platform/2000D.121 -maxdepth 2 -iname autoexec.bin | head -n 1)
-          if [ -z "$found" ]; then echo "no autoexec.bin was built"; exit 1; fi
+          if [ -z "$found" ]; then echo "no autoexec.bin"; exit 1; fi
           cp "$found" out/AUTOEXEC.BIN
           ls -l out/AUTOEXEC.BIN
           md5sum out/AUTOEXEC.BIN
-          strings -a out/AUTOEXEC.BIN | grep -c -E "filmos_key_used|filmos_overlays" || true
 
-      - name: Fetch M-Film sources and force LiveView-only
-        run: |
-          git clone --depth 1 https://github.com/HNGSeries/M-Film.git /tmp/M-Film
-          # Force FOS_LV_ONLY = 1 so the film OS only opens in LiveView
-          # (on 2000D, GUIMODE_ML_MENU is Canon's menu mode when not in LV)
-          sed -i 's/#define FOS_LV_ONLY 0/#define FOS_LV_ONLY 1/' /tmp/M-Film/ml-dev/fork/src/filmroll.c
-          # Confirm the change
-          grep -n "FOS_LV_ONLY" /tmp/M-Film/ml-dev/fork/src/filmroll.c | head -5
-
-      - name: Prepare modules/filmos and build filmos.mo
+      - name: Build LiveView-only filmos.mo
         continue-on-error: true
         run: |
-          set -e
+          git clone --depth 1 https://github.com/HNGSeries/M-Film.git /tmp/M-Film
+          sed -i 's/#define FOS_LV_ONLY 0/#define FOS_LV_ONLY 1/' /tmp/M-Film/ml-dev/fork/src/filmroll.c
+          grep -n FOS_LV_ONLY /tmp/M-Film/ml-dev/fork/src/filmroll.c | head -5
+
           MOD=modules/filmos
           rm -rf "$MOD"
           mkdir -p "$MOD"
 
-          # Module Makefile (from M-Film, simplified)
-          cat > "$MOD/Makefile" << 'EOF'
-MODULE_NAME = filmos
-MODULE_OBJS = $(addprefix $(BUILD_DIR)/,$(FILMOS_OBJS))
-MODULE_OBJS += $(BUILD_DIR)/fos-libm.a $(TOP_DIR)/platform/$(FILMOS_PLATFORM)/build/gcc-libgcc.a
-TOP_DIR = ../..
-
-FILMOS_MODEL = $(firstword $(subst ., ,$(FILMOS_PLATFORM)))
-FILMOS_FW = $(lastword $(subst ., ,$(FILMOS_PLATFORM)))
-MODULE_CFLAGS += -I$(TOP_DIR)/platform/$(FILMOS_PLATFORM) -I$(TOP_DIR)/platform/$(FILMOS_PLATFORM)/include \
-    -DCONFIG_$(FILMOS_MODEL)=1 -DCONFIG_$(FILMOS_MODEL)_$(FILMOS_FW)=1 -DCONFIG_FW_VERSION=$(FILMOS_FW) \
-    -DFOS_LV_ONLY=1
-
-include $(TOP_DIR)/modules/Makefile
-.DEFAULT_GOAL := $(BUILD_DIR)/module_complete
-
-$(BUILD_DIR)/fos-libm.a: $(TOP_DIR)/platform/$(FILMOS_PLATFORM)/build/newlib-libm.a | $(BUILD_DIR)
-	$(OBJCOPY) --redefine-sym __errno=fos_errno $< $@
-EOF
-
-          # Copy sources
           cp /tmp/M-Film/ml-dev/fork/src/filmroll.c "$MOD/"
-          cp /tmp/M-Film/ml-dev/fork/src/filmroll.h "$MOD/" 2>/dev/null || true
           cp /tmp/M-Film/ml-dev/fork/src/filmos_mod.h "$MOD/"
           cp /tmp/M-Film/ml-dev/filmos/fos_*.c "$MOD/"
-          cp /tmp/M-Film/ml-dev/filmos/fos_*.h "$MOD/" 2>/dev/null || true
           cp /tmp/M-Film/ml-dev/filmos/fos.h "$MOD/" 2>/dev/null || true
+          cp /tmp/M-Film/ml-dev/filmos/fos_*.h "$MOD/" 2>/dev/null || true
+          printf '#define MFILM_VERSION "0.2.1-2000D-LV"\n' > "$MOD/fos_version.h"
 
-          # Version header
-          VERSION=$(tr -d ' \r\n' < /tmp/M-Film/VERSION 2>/dev/null || echo "0.2.1-2000D")
-          printf '#define MFILM_VERSION "%s"\n' "$VERSION" > "$MOD/fos_version.h"
-
-          # Object list (with darkroom)
-          OBJS="filmroll.o fos_gfx.o fos_film.o fos_ui.o fos_shelf.o fos_pages.o fos_hud.o fos_print.o fos_dark.o fos_dev.o fos_lab.o fos_looks.o fos_jpeg.o"
-
-          # Need platform build products (libm, libgcc, symbols)
-          if [ ! -f platform/2000D.121/build/newlib-libm.a ]; then
-            echo "WARNING: newlib-libm.a missing – module build may fail"
-            ls -la platform/2000D.121/build/ || true
+          cp modules/filmos-Makefile "$MOD/Makefile" 2>/dev/null || true
+          if [ ! -f "$MOD/Makefile" ]; then
+            printf '%s\n' \
+              'MODULE_NAME = filmos' \
+              'MODULE_OBJS = $(addprefix $(BUILD_DIR)/,$(FILMOS_OBJS))' \
+              'MODULE_OBJS += $(BUILD_DIR)/fos-libm.a $(TOP_DIR)/platform/$(FILMOS_PLATFORM)/build/gcc-libgcc.a' \
+              'TOP_DIR = ../..' \
+              'FILMOS_MODEL = $(firstword $(subst ., ,$(FILMOS_PLATFORM)))' \
+              'FILMOS_FW = $(lastword $(subst ., ,$(FILMOS_PLATFORM)))' \
+              'MODULE_CFLAGS += -I$(TOP_DIR)/platform/$(FILMOS_PLATFORM) -I$(TOP_DIR)/platform/$(FILMOS_PLATFORM)/include -DCONFIG_$(FILMOS_MODEL)=1 -DCONFIG_$(FILMOS_MODEL)_$(FILMOS_FW)=1 -DCONFIG_FW_VERSION=$(FILMOS_FW) -DFOS_LV_ONLY=1' \
+              'include $(TOP_DIR)/modules/Makefile' \
+              '.DEFAULT_GOAL := $(BUILD_DIR)/module_complete' \
+              '$(BUILD_DIR)/fos-libm.a: $(TOP_DIR)/platform/$(FILMOS_PLATFORM)/build/newlib-libm.a | $(BUILD_DIR)' \
+              '$(OBJCOPY) --redefine-sym __errno=fos_errno $< $@' \
+              > "$MOD/Makefile"
           fi
 
+          OBJS="filmroll.o fos_gfx.o fos_film.o fos_ui.o fos_shelf.o fos_pages.o fos_hud.o fos_print.o fos_dark.o fos_dev.o fos_lab.o fos_looks.o fos_jpeg.o"
           cd "$MOD"
-          make FILMOS_PLATFORM=2000D.121 FILMOS_OBJS="$OBJS" FATAL_WARNINGS= 2>&1 | tee "$GITHUB_WORKSPACE/filmos-build.log" | tail -80
+          make FILMOS_PLATFORM=2000D.121 FILMOS_OBJS="$OBJS" 2>&1 | tee "$GITHUB_WORKSPACE/filmos-build.log" | tail -100
 
           if [ -f build/filmos.mo ]; then
             cp build/filmos.mo "$GITHUB_WORKSPACE/out/filmos.mo"
             ls -l "$GITHUB_WORKSPACE/out/filmos.mo"
-            echo "filmos.mo built successfully"
           else
-            echo "filmos.mo was NOT produced – see filmos-build.log"
-            tail -60 "$GITHUB_WORKSPACE/filmos-build.log" || true
+            echo "filmos.mo not produced"
+            tail -40 "$GITHUB_WORKSPACE/filmos-build.log" || true
           fi
 
       - name: Summary
         run: |
-          echo "=== Artifacts ==="
           ls -l out/ || true
-          echo "=== AUTOEXEC hooks ==="
-          strings -a out/AUTOEXEC.BIN 2>/dev/null | grep -E "filmos_key_used|filmos_overlays" || true
-          if [ -f out/filmos.mo ]; then
-            echo "filmos.mo size: $(wc -c < out/filmos.mo) bytes"
-            strings -a out/filmos.mo | grep -E "FOS_LV_ONLY|keep the hold|startup" | head -5 || true
-          fi
+          if [ -f out/filmos.mo ]; then echo "filmos.mo OK"; else echo "filmos.mo MISSING"; fi
 
       - uses: actions/upload-artifact@v4
         if: always()
