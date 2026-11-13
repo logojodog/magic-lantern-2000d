@@ -1,22 +1,19 @@
-name: Build 2000D with M-Film hooks
+name: Build 2000D with M-Film hooks + filmos.mo
 
-# Run it by hand: Actions tab -> "Build 2000D with M-Film hooks" -> Run workflow.
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    # GCC 10.3 (what the 2000D README asks for: "GCC 10 or newer").
-    # If GitHub no longer offers ubuntu-22.04, try ubuntu-24.04 and send me the log.
     runs-on: ubuntu-22.04
     defaults:
       run:
-        shell: bash          # bash with pipefail, so a failing make isn't hidden by "| tee"
+        shell: bash
 
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0      # the build asks git for the branch name and commit
+          fetch-depth: 0
 
       - name: Install the build tools
         run: |
@@ -24,16 +21,9 @@ jobs:
           sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi \
             python3 python3-docutils python3-setuptools zip unzip git make
           arm-none-eabi-gcc --version | head -n 1
-          git --version
 
-      - name: Add M-Film's hooks to the source
+      - name: Add M-Film's passive hooks to the source
         run: python3 apply_hooks.py .
-
-      - name: Build the modules (the hooks don't need them, so a failure here is not fatal)
-        continue-on-error: true
-        run: |
-          cd modules
-          make -j"$(nproc)" 2>&1 | tail -n 40
 
       - name: Build autoexec.bin for the 2000D (firmware 1.2.1)
         run: |
@@ -41,7 +31,7 @@ jobs:
           make clean
           make 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
 
-      - name: Collect the result and check it
+      - name: Collect AUTOEXEC.BIN
         run: |
           mkdir -p out
           found=$(find platform/2000D.121 -maxdepth 2 -iname autoexec.bin | head -n 1)
@@ -49,10 +39,88 @@ jobs:
           cp "$found" out/AUTOEXEC.BIN
           ls -l out/AUTOEXEC.BIN
           md5sum out/AUTOEXEC.BIN
-          echo "The stock 2000D release is about 365,856 bytes; this one should be a little bigger."
-          echo "Hook symbol names inside it (should be 2 or more):"
           strings -a out/AUTOEXEC.BIN | grep -c -E "filmos_key_used|filmos_overlays" || true
-          strings -a out/AUTOEXEC.BIN | grep -E "^Magic Lantern|Camera +:" | head -n 3 || true
+
+      - name: Fetch M-Film sources and force LiveView-only
+        run: |
+          git clone --depth 1 https://github.com/HNGSeries/M-Film.git /tmp/M-Film
+          # Force FOS_LV_ONLY = 1 so the film OS only opens in LiveView
+          # (on 2000D, GUIMODE_ML_MENU is Canon's menu mode when not in LV)
+          sed -i 's/#define FOS_LV_ONLY 0/#define FOS_LV_ONLY 1/' /tmp/M-Film/ml-dev/fork/src/filmroll.c
+          # Confirm the change
+          grep -n "FOS_LV_ONLY" /tmp/M-Film/ml-dev/fork/src/filmroll.c | head -5
+
+      - name: Prepare modules/filmos and build filmos.mo
+        continue-on-error: true
+        run: |
+          set -e
+          MOD=modules/filmos
+          rm -rf "$MOD"
+          mkdir -p "$MOD"
+
+          # Module Makefile (from M-Film, simplified)
+          cat > "$MOD/Makefile" << 'EOF'
+MODULE_NAME = filmos
+MODULE_OBJS = $(addprefix $(BUILD_DIR)/,$(FILMOS_OBJS))
+MODULE_OBJS += $(BUILD_DIR)/fos-libm.a $(TOP_DIR)/platform/$(FILMOS_PLATFORM)/build/gcc-libgcc.a
+TOP_DIR = ../..
+
+FILMOS_MODEL = $(firstword $(subst ., ,$(FILMOS_PLATFORM)))
+FILMOS_FW = $(lastword $(subst ., ,$(FILMOS_PLATFORM)))
+MODULE_CFLAGS += -I$(TOP_DIR)/platform/$(FILMOS_PLATFORM) -I$(TOP_DIR)/platform/$(FILMOS_PLATFORM)/include \
+    -DCONFIG_$(FILMOS_MODEL)=1 -DCONFIG_$(FILMOS_MODEL)_$(FILMOS_FW)=1 -DCONFIG_FW_VERSION=$(FILMOS_FW) \
+    -DFOS_LV_ONLY=1
+
+include $(TOP_DIR)/modules/Makefile
+.DEFAULT_GOAL := $(BUILD_DIR)/module_complete
+
+$(BUILD_DIR)/fos-libm.a: $(TOP_DIR)/platform/$(FILMOS_PLATFORM)/build/newlib-libm.a | $(BUILD_DIR)
+	$(OBJCOPY) --redefine-sym __errno=fos_errno $< $@
+EOF
+
+          # Copy sources
+          cp /tmp/M-Film/ml-dev/fork/src/filmroll.c "$MOD/"
+          cp /tmp/M-Film/ml-dev/fork/src/filmroll.h "$MOD/" 2>/dev/null || true
+          cp /tmp/M-Film/ml-dev/fork/src/filmos_mod.h "$MOD/"
+          cp /tmp/M-Film/ml-dev/filmos/fos_*.c "$MOD/"
+          cp /tmp/M-Film/ml-dev/filmos/fos_*.h "$MOD/" 2>/dev/null || true
+          cp /tmp/M-Film/ml-dev/filmos/fos.h "$MOD/" 2>/dev/null || true
+
+          # Version header
+          VERSION=$(tr -d ' \r\n' < /tmp/M-Film/VERSION 2>/dev/null || echo "0.2.1-2000D")
+          printf '#define MFILM_VERSION "%s"\n' "$VERSION" > "$MOD/fos_version.h"
+
+          # Object list (with darkroom)
+          OBJS="filmroll.o fos_gfx.o fos_film.o fos_ui.o fos_shelf.o fos_pages.o fos_hud.o fos_print.o fos_dark.o fos_dev.o fos_lab.o fos_looks.o fos_jpeg.o"
+
+          # Need platform build products (libm, libgcc, symbols)
+          if [ ! -f platform/2000D.121/build/newlib-libm.a ]; then
+            echo "WARNING: newlib-libm.a missing – module build may fail"
+            ls -la platform/2000D.121/build/ || true
+          fi
+
+          cd "$MOD"
+          make FILMOS_PLATFORM=2000D.121 FILMOS_OBJS="$OBJS" FATAL_WARNINGS= 2>&1 | tee "$GITHUB_WORKSPACE/filmos-build.log" | tail -80
+
+          if [ -f build/filmos.mo ]; then
+            cp build/filmos.mo "$GITHUB_WORKSPACE/out/filmos.mo"
+            ls -l "$GITHUB_WORKSPACE/out/filmos.mo"
+            echo "filmos.mo built successfully"
+          else
+            echo "filmos.mo was NOT produced – see filmos-build.log"
+            tail -60 "$GITHUB_WORKSPACE/filmos-build.log" || true
+          fi
+
+      - name: Summary
+        run: |
+          echo "=== Artifacts ==="
+          ls -l out/ || true
+          echo "=== AUTOEXEC hooks ==="
+          strings -a out/AUTOEXEC.BIN 2>/dev/null | grep -E "filmos_key_used|filmos_overlays" || true
+          if [ -f out/filmos.mo ]; then
+            echo "filmos.mo size: $(wc -c < out/filmos.mo) bytes"
+            strings -a out/filmos.mo | grep -E "FOS_LV_ONLY|keep the hold|startup" | head -5 || true
+          fi
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -61,3 +129,4 @@ jobs:
           path: |
             out/
             build.log
+            filmos-build.log
