@@ -72,6 +72,17 @@ int filmroll_overlays_active(void)
 
 extern int module_autoload_disabled;
 
+static int filmos_is_loaded(void)
+{
+    /* Walk the loaded modules looking for one named "filmos". */
+    for (int i = 0; i < MODULE_COUNT_MAX; i++) {
+        const char *name = module_get_name(i);
+        if (name && strcmp(name, "filmos") == 0)
+            return 1;
+    }
+    return 0;
+}
+
 static void filmhook_note(const char *why)
 {
     NotifyBox(12000, "M-Film: %s", why);
@@ -84,16 +95,16 @@ static void filmhook_note(const char *why)
     }
 }
 
-static void filmhook_task(void)
+static void filmhook_task(void *unused)
 {
+    (void)unused;
+
     /* Wait for ML's module loader (a few seconds after boot). */
     for (int i = 0; i < 40 && filmos_menu_open == (void *)ret_0; i++)
         msleep(400);
 
     if (filmos_menu_open != (void *)ret_0) {
-        /* Module is alive. Give it a moment, then ask it to open the UI
-         * (startup_picker default is "always", but this forces it even if
-         * the setting was changed or the task raced). */
+        /* Module is alive. Give it a moment, then ask it to open the UI. */
         msleep(800);
         filmroll_menu_requested();
         return;
@@ -105,7 +116,7 @@ static void filmhook_task(void)
         filmhook_note("'Disable all modules' is ON (MENU > Debug)");
     else if (FIO_GetFileSize("ML/modules/filmos.mo", &size) != 0)
         filmhook_note("ML/modules/filmos.mo missing – copy M-Film files");
-    else if (module_get_number("filmos") < 0)
+    else if (!filmos_is_loaded())
         filmhook_note("modules skipped (unclean power-off?). Power cycle.");
     else
         filmhook_note("filmos.mo present but did not load – check Modules");
