@@ -16,6 +16,7 @@
 #include <bmp.h>
 #include <property.h>
 #include <gui.h>
+#include <string.h>
 
 /* Declared by the module (filmos.mo). Until the module is loaded these
  * resolve to the stub that returns 0 / does nothing. */
