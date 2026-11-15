@@ -11,11 +11,12 @@ MODULE_OBJS = \
 	fos_hud.o fos_print.o fos_dark.o fos_dev.o fos_lab.o fos_looks.o fos_jpeg.o \
 	fos-libm.a
 
+# -I. first: module dir holds 2000D consts.h/gui.h copied by the workflow
 MODULE_CFLAGS += \
+	-I. \
 	-I$(TOP_DIR)/platform/$(FILMOS_PLATFORM) \
 	-I$(TOP_DIR)/platform/$(FILMOS_PLATFORM)/include \
 	-I$(TOP_DIR)/src \
-	-I. \
 	-DCONFIG_$(FILMOS_MODEL)=1 \
 	-DCONFIG_$(FILMOS_MODEL)_$(FILMOS_FW)=1 \
 	-DCONFIG_FW_VERSION=$(FILMOS_FW) \
