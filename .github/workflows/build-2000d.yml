@@ -1,1 +1,204 @@
-PLACEHOLDER3
+name: Build 2000D with M-Film hooks
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install the build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi python3 python3-docutils python3-setuptools zip unzip git make
+          arm-none-eabi-gcc --version | head -n 1
+
+      - name: Add M-Film passive hooks
+        run: python3 apply_hooks.py .
+
+      - name: Build autoexec.bin
+        run: |
+          cd platform/2000D.121
+          make clean
+          make 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
+
+      - name: Collect AUTOEXEC.BIN
+        run: |
+          mkdir -p out
+          found=$(find platform/2000D.121 -maxdepth 2 -iname autoexec.bin | head -n 1)
+          if [ -z "$found" ]; then echo "no autoexec.bin"; exit 1; fi
+          cp "$found" out/AUTOEXEC.BIN
+          ls -l out/AUTOEXEC.BIN
+          md5sum out/AUTOEXEC.BIN
+
+      - name: Build LiveView-only filmos.mo (T7 optimized)
+        continue-on-error: true
+        run: |
+          git clone --depth 1 https://github.com/HNGSeries/M-Film.git /tmp/M-Film
+          sed -i 's/#define FOS_LV_ONLY 0/#define FOS_LV_ONLY 1/' /tmp/M-Film/ml-dev/fork/src/filmroll.c
+          grep -n FOS_LV_ONLY /tmp/M-Film/ml-dev/fork/src/filmroll.c | head -5
+
+          # --- T7 performance patches ---
+          python3 - <<'PY'
+          from pathlib import Path
+
+          shelf = Path("/tmp/M-Film/ml-dev/filmos/fos_shelf.c")
+          text = shelf.read_text()
+          old = """    for (int i = 0; i < nlist && n < 8; i++)
+    {
+        float d = i - pos.x;
+        if (absf(d) > 2.7f) continue;
+        order[n].i = i; order[n].d = d; n++;
+    }
+    /* far ones first */
+    for (int a = 0; a < n; a++)
+        for (int b = a + 1; b < n; b++)
+            if (absf(order[b].d) > absf(order[a].d))
+            {
+                int ti = order[a].i; float td = order[a].d;
+                order[a] = order[b];
+                order[b].i = ti; order[b].d = td;
+            }
+
+    for (int k = 0; k < n; k++)
+    {
+        int i = list[order[k].i];
+        float d = order[k].d;
+        struct fos_can_pose p;
+        int mid = absf(d) < 0.5f;
+        pose_of(d, &p, mid ? lift_mid : 0, spread);
+        if (!mid) p.light = (int) (p.light * (1 - fade_sides));
+        if (drop.x > 0.002f)
+        {
+            /* a new shelf: its canisters drop in from above (or rise from below), the far ones a little later */
+            float t = clampf(drop.x * (1 + absf(d) * 0.25f), 0, 1);
+            p.floor_y -= (int) (t * 90 * drop_dir);
+            p.light = (int) (p.light * (1 - t));
+            p.reflect = (int) (p.reflect * (1 - t));
+        }
+        if (mid && leader_mid) p.leader = leader_mid;
+        if (p.light <= 4) continue;
+        struct fos_can *c = ui_can(i);
+        int w = fos_can_width(p.scale);
+        contact_shadow(p.cx8 >> 8, p.floor_y, w * 6 / 10, 7 * p.scale / 256 + 2, 150 * p.light / 256);
+        fos_can_draw(cv, c, &p);"""
+
+          new = """    /* T7: fewer cans + tighter range when moving or quality low */
+    float max_d = (fos_can_quality <= 0 || absf(pos.v) > 0.9f) ? 1.6f : 2.7f;
+    int max_n   = (fos_can_quality <= 0 || absf(pos.v) > 1.2f) ? 5 : 8;
+    for (int i = 0; i < nlist && n < max_n; i++)
+    {
+        float d = i - pos.x;
+        if (absf(d) > max_d) continue;
+        order[n].i = i; order[n].d = d; n++;
+    }
+    /* far ones first */
+    for (int a = 0; a < n; a++)
+        for (int b = a + 1; b < n; b++)
+            if (absf(order[b].d) > absf(order[a].d))
+            {
+                int ti = order[a].i; float td = order[a].d;
+                order[a] = order[b];
+                order[b].i = ti; order[b].d = td;
+            }
+
+    int skip_shadow = (fos_can_quality <= 0) || (absf(pos.v) > 0.7f);
+
+    for (int k = 0; k < n; k++)
+    {
+        int i = list[order[k].i];
+        float d = order[k].d;
+        struct fos_can_pose p;
+        int mid = absf(d) < 0.5f;
+        pose_of(d, &p, mid ? lift_mid : 0, spread);
+        if (!mid) p.light = (int) (p.light * (1 - fade_sides));
+        if (drop.x > 0.002f)
+        {
+            /* a new shelf: its canisters drop in from above (or rise from below), the far ones a little later */
+            float t = clampf(drop.x * (1 + absf(d) * 0.25f), 0, 1);
+            p.floor_y -= (int) (t * 90 * drop_dir);
+            p.light = (int) (p.light * (1 - t));
+            p.reflect = (int) (p.reflect * (1 - t));
+        }
+        if (mid && leader_mid) p.leader = leader_mid;
+        if (p.light <= 4) continue;
+        if (!mid && (fos_can_quality <= 0 || absf(pos.v) > 0.8f))
+            p.reflect = 0;
+        struct fos_can *c = ui_can(i);
+        int w = fos_can_width(p.scale);
+        if (!skip_shadow)
+            contact_shadow(p.cx8 >> 8, p.floor_y, w * 6 / 10, 7 * p.scale / 256 + 2, 150 * p.light / 256);
+        fos_can_draw(cv, c, &p);"""
+
+          if old not in text:
+              raise SystemExit("fos_shelf draw_canisters body not found – upstream changed")
+          shelf.write_text(text.replace(old, new))
+          print("patched fos_shelf.c")
+
+          ui = Path("/tmp/M-Film/ml-dev/filmos/fos_ui.c")
+          ut = ui.read_text()
+          old_s = """    int avg = (stat.draw_ms + stat.present_ms) / stat.frames;
+    if (avg > 50) { slow++; quick = 0; }
+    else if (avg < 26) { quick++; slow = 0; }
+    else slow = quick = 0;
+    if (slow >= 1 && fos_can_quality > 0) { fos_can_quality--; slow = 0; }
+    if (quick >= 3 && fos_can_quality < 2) { fos_can_quality++; quick = 0; }"""
+          new_s = """    int avg = (stat.draw_ms + stat.present_ms) / stat.frames;
+    /* more aggressive on slow bodies (T7/2000D) */
+    if (avg > 42) { slow++; quick = 0; }
+    else if (avg < 22) { quick++; slow = 0; }
+    else slow = quick = 0;
+    if (slow >= 1 && fos_can_quality > 0) { fos_can_quality--; slow = 0; }
+    if (quick >= 4 && fos_can_quality < 2) { fos_can_quality++; quick = 0; }"""
+          if old_s not in ut:
+              raise SystemExit("fos_ui frame_stats thresholds not found – upstream changed")
+          ut = ut.replace(old_s, new_s).replace("#define FRAME_PERIOD 28", "#define FRAME_PERIOD 32")
+          ui.write_text(ut)
+          print("patched fos_ui.c")
+          PY
+
+          MOD=modules/filmos
+          rm -rf "$MOD"
+          mkdir -p "$MOD"
+
+          cp /tmp/M-Film/ml-dev/fork/src/filmroll.c "$MOD/"
+          cp /tmp/M-Film/ml-dev/fork/src/filmos_mod.h "$MOD/"
+          cp /tmp/M-Film/ml-dev/filmos/fos_*.c "$MOD/"
+          cp /tmp/M-Film/ml-dev/filmos/fos.h "$MOD/" 2>/dev/null || true
+          cp /tmp/M-Film/ml-dev/filmos/fos_*.h "$MOD/" 2>/dev/null || true
+          printf '#define MFILM_VERSION "0.2.1-2000D-LV-opt"\n' > "$MOD/fos_version.h"
+          cp filmos-Makefile "$MOD/Makefile"
+
+          OBJS="filmroll.o fos_gfx.o fos_film.o fos_ui.o fos_shelf.o fos_pages.o fos_hud.o fos_print.o fos_dark.o fos_dev.o fos_lab.o fos_looks.o fos_jpeg.o"
+          cd "$MOD"
+          make FILMOS_PLATFORM=2000D.121 FILMOS_OBJS="$OBJS" 2>&1 | tee "$GITHUB_WORKSPACE/filmos-build.log" | tail -100
+
+          if [ -f build/filmos.mo ]; then
+            cp build/filmos.mo "$GITHUB_WORKSPACE/out/filmos.mo"
+            ls -l "$GITHUB_WORKSPACE/out/filmos.mo"
+          else
+            echo "filmos.mo not produced"
+            tail -40 "$GITHUB_WORKSPACE/filmos-build.log" || true
+          fi
+
+      - name: Summary
+        run: |
+          ls -l out/ || true
+          if [ -f out/filmos.mo ]; then echo "filmos.mo OK"; else echo "filmos.mo MISSING"; fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: 2000D-mfilm-hooks
+          path: |
+            out/
+            build.log
+            filmos-build.log
