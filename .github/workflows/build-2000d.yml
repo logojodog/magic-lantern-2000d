@@ -67,12 +67,17 @@ jobs:
           cp platform/2000D.121/features.h "$MOD/"
           printf '/* stub */\n' > "$MOD/internals-common.h"
 
-          printf '#define MFILM_VERSION "0.2.1-2000D-LV-opt"\n' > "$MOD/fos_version.h"
+          # Force identifiable version in the init log line
+          printf '#define MFILM_VERSION "0.2.1-T7-OPT"\n' > "$MOD/fos_version.h"
+          # Also hard-stamp the dbg format so even if __has_include fails we see T7-OPT
+          sed -i 's/init: M-Film " MFILM_VERSION ", fork build %s %s/init: M-Film " MFILM_VERSION " T7-OPT, fork build %s %s/' "$MOD/filmroll.c" || true
+          # Fallback: inject #define before the ifndef guard
+          sed -i 's|#ifndef MFILM_VERSION|#define MFILM_VERSION "0.2.1-T7-OPT"\n#ifndef MFILM_VERSION_IGNORE|' "$MOD/filmroll.c"
+
           cp filmos-Makefile "$MOD/Makefile"
           printf 'filmos\n======\n\nT7 optimized film OS.\n\n:Author: M-Film + T7 opt\n:License: GPL\n\n' > "$MOD/README.rst"
 
           cd "$MOD"
-          # Build the .mo; dep-check may still warn on this early port
           make FILMOS_PLATFORM=2000D.121 filmos.mo 2>&1 | tee "$GITHUB_WORKSPACE/filmos-build.log" | tail -200
           make FILMOS_PLATFORM=2000D.121 filmos.sym 2>&1 | tee -a "$GITHUB_WORKSPACE/filmos-build.log" | tail -20 || true
 
@@ -85,8 +90,8 @@ jobs:
           cp "$found" "$GITHUB_WORKSPACE/out/ML/modules/filmos.mo"
           ls -l "$GITHUB_WORKSPACE/out/ML/modules/filmos.mo"
           md5sum "$GITHUB_WORKSPACE/out/ML/modules/filmos.mo"
-          # show that optimized strings are in the binary
-          strings "$found" | grep -E '2000D-LV-opt|max_d' || true
+          echo "--- version strings in binary ---"
+          strings "$found" | grep -E 'T7-OPT|0\.2\.1' | head -10
 
       - name: Summary
         run: |
