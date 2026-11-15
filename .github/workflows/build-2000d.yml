@@ -20,6 +20,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi python3 python3-docutils python3-setuptools zip unzip git make
           arm-none-eabi-gcc --version | head -n 1
+          sudo ln -sf "$(which python3)" /usr/local/bin/python2
 
       - name: Add M-Film passive hooks
         run: python3 apply_hooks.py .
@@ -32,51 +33,58 @@ jobs:
 
       - name: Collect AUTOEXEC.BIN
         run: |
-          mkdir -p out
+          mkdir -p out/ML/modules
           found=$(find platform/2000D.121 -maxdepth 2 -iname autoexec.bin | head -n 1)
           if [ -z "$found" ]; then echo "no autoexec.bin"; exit 1; fi
           cp "$found" out/AUTOEXEC.BIN
+          sym=$(find platform/2000D.121 -maxdepth 2 -name 't7_121.sym' | head -n 1)
+          if [ -n "$sym" ]; then cp "$sym" out/ML/modules/t7_121.sym; fi
           ls -l out/AUTOEXEC.BIN
           md5sum out/AUTOEXEC.BIN
 
       - name: Build LiveView-only filmos.mo (T7 optimized)
-        continue-on-error: true
         run: |
           git clone --depth 1 https://github.com/HNGSeries/M-Film.git /tmp/M-Film
           sed -i 's/#define FOS_LV_ONLY 0/#define FOS_LV_ONLY 1/' /tmp/M-Film/ml-dev/fork/src/filmroll.c
-          grep -n FOS_LV_ONLY /tmp/M-Film/ml-dev/fork/src/filmroll.c | head -5
-
-          python3 patch_filmos_t7.py /tmp/M-Film
 
           MOD=modules/filmos
           rm -rf "$MOD"
-          mkdir -p "$MOD/build"
+          mkdir -p "$MOD"
 
           cp /tmp/M-Film/ml-dev/fork/src/filmroll.c "$MOD/"
           cp /tmp/M-Film/ml-dev/fork/src/filmos_mod.h "$MOD/"
           cp /tmp/M-Film/ml-dev/filmos/fos_*.c "$MOD/"
           cp /tmp/M-Film/ml-dev/filmos/fos.h "$MOD/" 2>/dev/null || true
           cp /tmp/M-Film/ml-dev/filmos/fos_*.h "$MOD/" 2>/dev/null || true
+
+          # Optimized film OS shelf/UI (checked into this repo)
+          cp filmos-opt/fos_shelf.c "$MOD/fos_shelf.c"
+          cp filmos-opt/fos_ui.c "$MOD/fos_ui.c"
+          echo "Using optimized fos_shelf.c / fos_ui.c from filmos-opt/"
+          grep -n "max_d\|skip_shadow\|avg > 42\|FRAME_PERIOD 32" "$MOD/fos_shelf.c" "$MOD/fos_ui.c" || true
+
           printf '#define MFILM_VERSION "0.2.1-2000D-LV-opt"\n' > "$MOD/fos_version.h"
           cp filmos-Makefile "$MOD/Makefile"
+          printf 'filmos\n======\n\nT7/2000D LiveView-only film OS with shelf performance patches.\n\n:Author: M-Film + T7 opt\n:License: GPL\n\n' > "$MOD/README.rst"
 
-          OBJS="filmroll.o fos_gfx.o fos_film.o fos_ui.o fos_shelf.o fos_pages.o fos_hud.o fos_print.o fos_dark.o fos_dev.o fos_lab.o fos_looks.o fos_jpeg.o"
           cd "$MOD"
-          make BUILD_DIR=build FILMOS_PLATFORM=2000D.121 FILMOS_OBJS="$OBJS" 2>&1 | tee "$GITHUB_WORKSPACE/filmos-build.log" | tail -150
+          make FILMOS_PLATFORM=2000D.121 2>&1 | tee "$GITHUB_WORKSPACE/filmos-build.log" | tail -150
 
           found=$(find . -name 'filmos.mo' | head -n 1)
-          if [ -n "$found" ]; then
-            cp "$found" "$GITHUB_WORKSPACE/out/filmos.mo"
-            ls -l "$GITHUB_WORKSPACE/out/filmos.mo"
-          else
+          if [ -z "$found" ]; then
             echo "filmos.mo not produced"
             tail -80 "$GITHUB_WORKSPACE/filmos-build.log" || true
+            exit 1
           fi
+          cp "$found" "$GITHUB_WORKSPACE/out/ML/modules/filmos.mo"
+          ls -l "$GITHUB_WORKSPACE/out/ML/modules/filmos.mo"
+          md5sum "$GITHUB_WORKSPACE/out/ML/modules/filmos.mo"
 
       - name: Summary
         run: |
-          ls -l out/ || true
-          if [ -f out/filmos.mo ]; then echo "filmos.mo OK"; else echo "filmos.mo MISSING"; fi
+          echo "=== out/ ==="
+          find out -type f -ls
+          if [ -f out/ML/modules/filmos.mo ]; then echo "filmos.mo OK"; else echo "filmos.mo MISSING"; exit 1; fi
 
       - uses: actions/upload-artifact@v4
         if: always()
