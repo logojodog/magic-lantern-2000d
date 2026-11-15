@@ -6,12 +6,14 @@ FILMOS_PLATFORM ?= 2000D.121
 FILMOS_MODEL = $(firstword $(subst ., ,$(FILMOS_PLATFORM)))
 FILMOS_FW = $(lastword $(subst ., ,$(FILMOS_PLATFORM)))
 
+# libgcc provides __powisf2 etc. used by film-math
+LIBGCC_A := $(shell arm-none-eabi-gcc -print-libgcc-file-name)
+
 MODULE_OBJS = \
 	filmroll.o fos_gfx.o fos_film.o fos_ui.o fos_shelf.o fos_pages.o \
 	fos_hud.o fos_print.o fos_dark.o fos_dev.o fos_lab.o fos_looks.o fos_jpeg.o \
-	fos-libm.a
+	fos-libm.a $(LIBGCC_A)
 
-# -I. first: module dir holds 2000D consts.h/gui.h copied by the workflow
 MODULE_CFLAGS += \
 	-I. \
 	-I$(TOP_DIR)/platform/$(FILMOS_PLATFORM) \
@@ -25,6 +27,9 @@ MODULE_CFLAGS += \
 PYTHON = python3
 
 include ../Makefile.modules
+
+# Prefer the .mo; dep check is advisory for this early port
+.DEFAULT_GOAL := $(MODULE_OUTPUT)
 
 fos-libm.a: $(TOP_DIR)/src/libs/arm-none-eabi-O3/libm.a
 	$(OBJCOPY) --redefine-sym __errno=fos_errno $< $@

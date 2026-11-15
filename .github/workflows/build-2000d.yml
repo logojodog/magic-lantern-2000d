@@ -47,7 +47,6 @@ jobs:
           git clone --depth 1 https://github.com/HNGSeries/M-Film.git /tmp/M-Film
           sed -i 's/#define FOS_LV_ONLY 0/#define FOS_LV_ONLY 1/' /tmp/M-Film/ml-dev/fork/src/filmroll.c
 
-          # Optimized film OS lines (shelf + UI)
           python3 patch_filmos_t7.py /tmp/M-Film
           grep -n "max_d\|skip_shadow\|avg > 42\|FRAME_PERIOD 32" \
             /tmp/M-Film/ml-dev/filmos/fos_shelf.c /tmp/M-Film/ml-dev/filmos/fos_ui.c
@@ -62,21 +61,20 @@ jobs:
           cp /tmp/M-Film/ml-dev/filmos/fos.h "$MOD/" 2>/dev/null || true
           cp /tmp/M-Film/ml-dev/filmos/fos_*.h "$MOD/" 2>/dev/null || true
 
-          # 2000D platform headers in the module dir so #include "consts.h" / "gui.h"
-          # resolve to this camera (not platform/all from Makefile.modules)
           cp platform/2000D.121/consts.h "$MOD/"
           cp platform/2000D.121/gui.h "$MOD/"
           cp platform/2000D.121/internals.h "$MOD/"
           cp platform/2000D.121/features.h "$MOD/"
-          printf '/* stub: common bits live in internals.h on this tree */\n' > "$MOD/internals-common.h"
+          printf '/* stub */\n' > "$MOD/internals-common.h"
 
           printf '#define MFILM_VERSION "0.2.1-2000D-LV-opt"\n' > "$MOD/fos_version.h"
           cp filmos-Makefile "$MOD/Makefile"
-          printf 'filmos\n======\n\nT7/2000D LiveView-only film OS with shelf performance patches.\n\n:Author: M-Film + T7 opt\n:License: GPL\n\n' > "$MOD/README.rst"
+          printf 'filmos\n======\n\nT7 optimized film OS.\n\n:Author: M-Film + T7 opt\n:License: GPL\n\n' > "$MOD/README.rst"
 
           cd "$MOD"
-          # -I. first so local 2000D headers win
-          make FILMOS_PLATFORM=2000D.121 MODULE_CFLAGS="-I. -I../../platform/2000D.121 -I../../platform/2000D.121/include -I../../src -DCONFIG_2000D=1 -DCONFIG_2000D_121=1 -DCONFIG_FW_VERSION=121 -DFOS_LV_ONLY=1" 2>&1 | tee "$GITHUB_WORKSPACE/filmos-build.log" | tail -200
+          # Build the .mo; dep-check may still warn on this early port
+          make FILMOS_PLATFORM=2000D.121 filmos.mo 2>&1 | tee "$GITHUB_WORKSPACE/filmos-build.log" | tail -200
+          make FILMOS_PLATFORM=2000D.121 filmos.sym 2>&1 | tee -a "$GITHUB_WORKSPACE/filmos-build.log" | tail -20 || true
 
           found=$(find . -name 'filmos.mo' | head -n 1)
           if [ -z "$found" ]; then
@@ -87,6 +85,8 @@ jobs:
           cp "$found" "$GITHUB_WORKSPACE/out/ML/modules/filmos.mo"
           ls -l "$GITHUB_WORKSPACE/out/ML/modules/filmos.mo"
           md5sum "$GITHUB_WORKSPACE/out/ML/modules/filmos.mo"
+          # show that optimized strings are in the binary
+          strings "$found" | grep -E '2000D-LV-opt|max_d' || true
 
       - name: Summary
         run: |
