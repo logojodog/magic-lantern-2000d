@@ -47,6 +47,11 @@ jobs:
           git clone --depth 1 https://github.com/HNGSeries/M-Film.git /tmp/M-Film
           sed -i 's/#define FOS_LV_ONLY 0/#define FOS_LV_ONLY 1/' /tmp/M-Film/ml-dev/fork/src/filmroll.c
 
+          # Apply optimized film OS lines (shelf + UI frame-rate patches)
+          python3 patch_filmos_t7.py /tmp/M-Film
+          grep -n "max_d\|skip_shadow\|avg > 42\|FRAME_PERIOD 32" \
+            /tmp/M-Film/ml-dev/filmos/fos_shelf.c /tmp/M-Film/ml-dev/filmos/fos_ui.c
+
           MOD=modules/filmos
           rm -rf "$MOD"
           mkdir -p "$MOD"
@@ -56,12 +61,6 @@ jobs:
           cp /tmp/M-Film/ml-dev/filmos/fos_*.c "$MOD/"
           cp /tmp/M-Film/ml-dev/filmos/fos.h "$MOD/" 2>/dev/null || true
           cp /tmp/M-Film/ml-dev/filmos/fos_*.h "$MOD/" 2>/dev/null || true
-
-          # Optimized film OS shelf/UI (checked into this repo)
-          cp filmos-opt/fos_shelf.c "$MOD/fos_shelf.c"
-          cp filmos-opt/fos_ui.c "$MOD/fos_ui.c"
-          echo "Using optimized fos_shelf.c / fos_ui.c from filmos-opt/"
-          grep -n "max_d\|skip_shadow\|avg > 42\|FRAME_PERIOD 32" "$MOD/fos_shelf.c" "$MOD/fos_ui.c" || true
 
           printf '#define MFILM_VERSION "0.2.1-2000D-LV-opt"\n' > "$MOD/fos_version.h"
           cp filmos-Makefile "$MOD/Makefile"
