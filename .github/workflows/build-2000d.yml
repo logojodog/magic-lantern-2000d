@@ -50,7 +50,7 @@ jobs:
 
           MOD=modules/filmos
           rm -rf "$MOD"
-          mkdir -p "$MOD"
+          mkdir -p "$MOD/build"
 
           cp /tmp/M-Film/ml-dev/fork/src/filmroll.c "$MOD/"
           cp /tmp/M-Film/ml-dev/fork/src/filmos_mod.h "$MOD/"
@@ -62,15 +62,15 @@ jobs:
 
           OBJS="filmroll.o fos_gfx.o fos_film.o fos_ui.o fos_shelf.o fos_pages.o fos_hud.o fos_print.o fos_dark.o fos_dev.o fos_lab.o fos_looks.o fos_jpeg.o"
           cd "$MOD"
-          # BUILD_DIR must be set; modules/Makefile leaves it empty when invoked this way
-          make BUILD_DIR=build FILMOS_PLATFORM=2000D.121 FILMOS_OBJS="$OBJS" 2>&1 | tee "$GITHUB_WORKSPACE/filmos-build.log" | tail -120
+          make BUILD_DIR=build FILMOS_PLATFORM=2000D.121 FILMOS_OBJS="$OBJS" 2>&1 | tee "$GITHUB_WORKSPACE/filmos-build.log" | tail -150
 
-          if [ -f build/filmos.mo ]; then
-            cp build/filmos.mo "$GITHUB_WORKSPACE/out/filmos.mo"
+          found=$(find . -name 'filmos.mo' | head -n 1)
+          if [ -n "$found" ]; then
+            cp "$found" "$GITHUB_WORKSPACE/out/filmos.mo"
             ls -l "$GITHUB_WORKSPACE/out/filmos.mo"
           else
             echo "filmos.mo not produced"
-            tail -60 "$GITHUB_WORKSPACE/filmos-build.log" || true
+            tail -80 "$GITHUB_WORKSPACE/filmos-build.log" || true
           fi
 
       - name: Summary
