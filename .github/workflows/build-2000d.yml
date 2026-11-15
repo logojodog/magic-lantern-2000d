@@ -62,14 +62,15 @@ jobs:
 
           OBJS="filmroll.o fos_gfx.o fos_film.o fos_ui.o fos_shelf.o fos_pages.o fos_hud.o fos_print.o fos_dark.o fos_dev.o fos_lab.o fos_looks.o fos_jpeg.o"
           cd "$MOD"
-          make FILMOS_PLATFORM=2000D.121 FILMOS_OBJS="$OBJS" 2>&1 | tee "$GITHUB_WORKSPACE/filmos-build.log" | tail -100
+          # BUILD_DIR must be set; modules/Makefile leaves it empty when invoked this way
+          make BUILD_DIR=build FILMOS_PLATFORM=2000D.121 FILMOS_OBJS="$OBJS" 2>&1 | tee "$GITHUB_WORKSPACE/filmos-build.log" | tail -120
 
           if [ -f build/filmos.mo ]; then
             cp build/filmos.mo "$GITHUB_WORKSPACE/out/filmos.mo"
             ls -l "$GITHUB_WORKSPACE/out/filmos.mo"
           else
             echo "filmos.mo not produced"
-            tail -40 "$GITHUB_WORKSPACE/filmos-build.log" || true
+            tail -60 "$GITHUB_WORKSPACE/filmos-build.log" || true
           fi
 
       - name: Summary
