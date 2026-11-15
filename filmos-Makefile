@@ -14,16 +14,16 @@ MODULE_OBJS = \
 MODULE_CFLAGS += \
 	-I$(TOP_DIR)/platform/$(FILMOS_PLATFORM) \
 	-I$(TOP_DIR)/platform/$(FILMOS_PLATFORM)/include \
+	-I$(TOP_DIR)/src \
+	-I. \
 	-DCONFIG_$(FILMOS_MODEL)=1 \
 	-DCONFIG_$(FILMOS_MODEL)_$(FILMOS_FW)=1 \
 	-DCONFIG_FW_VERSION=$(FILMOS_FW) \
 	-DFOS_LV_ONLY=1
 
-# Force python3 for module_strings generation (ubuntu runners have no python2)
 PYTHON = python3
 
 include ../Makefile.modules
 
-# Math from the prebuilt newlib libm in this tree; remap errno for module isolation
 fos-libm.a: $(TOP_DIR)/src/libs/arm-none-eabi-O3/libm.a
 	$(OBJCOPY) --redefine-sym __errno=fos_errno $< $@

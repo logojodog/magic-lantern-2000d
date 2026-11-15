@@ -47,7 +47,7 @@ jobs:
           git clone --depth 1 https://github.com/HNGSeries/M-Film.git /tmp/M-Film
           sed -i 's/#define FOS_LV_ONLY 0/#define FOS_LV_ONLY 1/' /tmp/M-Film/ml-dev/fork/src/filmroll.c
 
-          # Apply optimized film OS lines (shelf + UI frame-rate patches)
+          # Optimized film OS lines (shelf + UI)
           python3 patch_filmos_t7.py /tmp/M-Film
           grep -n "max_d\|skip_shadow\|avg > 42\|FRAME_PERIOD 32" \
             /tmp/M-Film/ml-dev/filmos/fos_shelf.c /tmp/M-Film/ml-dev/filmos/fos_ui.c
@@ -62,17 +62,20 @@ jobs:
           cp /tmp/M-Film/ml-dev/filmos/fos.h "$MOD/" 2>/dev/null || true
           cp /tmp/M-Film/ml-dev/filmos/fos_*.h "$MOD/" 2>/dev/null || true
 
+          # This tree has no internals-common.h (older ML layout); filmroll expects it
+          printf '/* stub: 2000D tree folds common internals into internals.h */\n' > "$MOD/internals-common.h"
+
           printf '#define MFILM_VERSION "0.2.1-2000D-LV-opt"\n' > "$MOD/fos_version.h"
           cp filmos-Makefile "$MOD/Makefile"
           printf 'filmos\n======\n\nT7/2000D LiveView-only film OS with shelf performance patches.\n\n:Author: M-Film + T7 opt\n:License: GPL\n\n' > "$MOD/README.rst"
 
           cd "$MOD"
-          make FILMOS_PLATFORM=2000D.121 2>&1 | tee "$GITHUB_WORKSPACE/filmos-build.log" | tail -150
+          make FILMOS_PLATFORM=2000D.121 2>&1 | tee "$GITHUB_WORKSPACE/filmos-build.log" | tail -200
 
           found=$(find . -name 'filmos.mo' | head -n 1)
           if [ -z "$found" ]; then
             echo "filmos.mo not produced"
-            tail -80 "$GITHUB_WORKSPACE/filmos-build.log" || true
+            tail -100 "$GITHUB_WORKSPACE/filmos-build.log" || true
             exit 1
           fi
           cp "$found" "$GITHUB_WORKSPACE/out/ML/modules/filmos.mo"
